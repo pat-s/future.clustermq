@@ -38,9 +38,9 @@ ClusterMQFuture <- function(expr = NULL, envir = parent.frame(),
   if (substitute) expr <- substitute(expr)
 
   if (!is.null(label)) label <- as.character(label)
-  
+
   if (is.function(workers)) workers <- workers()
-  
+
   if (!is.null(workers) && !inherits(workers, "QSys")) {
     stop_if_not(length(workers) >= 1)
     if (is.numeric(workers)) {
@@ -49,7 +49,7 @@ ClusterMQFuture <- function(expr = NULL, envir = parent.frame(),
       stop("Argument 'workers' should be a clustermq::Qsys object or a positive numeric: ", mode(workers))
     }
   }
-  
+
   ## Record globals
   gp <- getGlobalsAndPackages(expr, envir = envir, globals = globals)
 
@@ -72,7 +72,7 @@ ClusterMQFuture <- function(expr = NULL, envir = parent.frame(),
 #' Prints a clustermq future
 #'
 #' @param x An ClusterMQFuture object
-#' 
+#'
 #' @param \ldots Not used.
 #'
 #' @export
@@ -100,7 +100,7 @@ getExpression.ClusterMQFuture <- function(future, mc.cores = 1L, ...) {
 cleanup <- function(...) UseMethod("cleanup")
 
 # Internal
-cleanup.ClusterMQFuture <- function(future, ...) {    
+cleanup.ClusterMQFuture <- function(future, ...) {
     workers <- future$workers
     if (isTRUE(attr(workers, "auto_cleanup"))) {
       cleanup_workers(workers)
@@ -117,33 +117,33 @@ cleanup.ClusterMQFuture <- function(future, ...) {
 #' @export
 resolved.ClusterMQFuture <- local({
   mdebug <- import_future("mdebug")
-  
+
   function(x, ...) {
     resolved <- NextMethod()
     if (resolved) return(TRUE)
 
     workers <- x$workers
     stop_if_not(inherits(workers, "QSys"))
-  
+
     debug <- getOption("future.debug", FALSE)
-  
+
     msg <- workers$receive_data(timeout = 0.1 / 1000)
     if (debug) mstr(msg)
     if (is.null(msg$result)) {
       return(FALSE)
     }
-  
+
     x$result <- msg$result
     if (!inherits(x$result, "FutureResult")) {
       ex <- UnexpectedFutureResultError(x)
       x$result <- ex
       stop(ex)
     }
-    
+
     x$state <- "finished"
-    
+
     cleanup(x)
-    
+
     TRUE
   }
 })
@@ -157,7 +157,7 @@ result.ClusterMQFuture <- function(future, ...) {
     if (inherits(result, "FutureError")) stop(result)
     return(result)
   }
-  
+
   if (future$state == "created") {
     future <- run(future)
   }
@@ -172,7 +172,7 @@ result.ClusterMQFuture <- function(future, ...) {
 
   future$result <- result
   future$state <- "finished"
-  
+
   result
 }
 
@@ -193,19 +193,19 @@ run.ClusterMQFuture <- local({
       msg <- sprintf("A future ('%s') can only be launched once.", label)
       stop(FutureError(msg, future = future))
     }
-  
+
     ## Assert that the process that created the future is
     ## also the one that evaluates/resolves/queries it.
     assertOwner(future)
-  
+
     ## Temporarily disable clustermq output?
     ## (i.e. messages and progress bars)
     debug <- getOption("future.debug", FALSE)
-  
+
     ## Get future expression
     stdout <- if (isTRUE(future$stdout)) TRUE else NA
     expr <- getExpression(future, stdout = stdout)
-  
+
     ## Get globals
     globals <- future$globals
 
@@ -227,15 +227,22 @@ run.ClusterMQFuture <- local({
       stopifnot(!is.na(workers$data_token), identical(token, workers$data_token))
       msg <- workers$receive_data()
       if (debug) mstr(msg)
-    
+
+
       ## Done?
       if (msg$token != workers$data_token) {  ## e.g. msg$token == "not set"
-        success <- workers$send_common_data()
-        stopifnot(success)
+        # success <- workers$send_common_data()
+        # stopifnot(success)
+        # FIXME
+        # How to evaluate the future here? workers$send_call()?
+        # The following works here:
+        # workers$send_call(x*2, list(x=5)), workers$receive_data()
+        browser()
+        workers$send_call(x*2, list(x=5))
         msg <- workers$receive_data()
         if (debug) mstr(msg)
       }
-      
+
       attr(workers, "initiated") <- TRUE
       future$workers <- workers
     }
@@ -253,7 +260,7 @@ run.ClusterMQFuture <- local({
     env <- new.env(parent = globalenv())
     for (name in names(globals)) env[[name]] <- globals[[name]]
     rm(list = "globals")
-    
+
     call_expr <- bquote(workers$send_call(.(expr), env = env, ref = ref))
     if (debug) print(call_expr)
     success <- eval(call_expr)
@@ -262,7 +269,7 @@ run.ClusterMQFuture <- local({
 
     ## 3. Running
     future$state <- "running"
-  
+
     invisible(future)
   } ## run()
 })
@@ -273,14 +280,14 @@ await <- function(...) UseMethod("await")
 #' Awaits the result of a clustermq future
 #'
 #' @param future The future.
-#' 
+#'
 #' @param timeout Total time (in seconds) waiting before generating an error.
-#' 
+#'
 #' @param delta The number of seconds to wait between each poll.
-#' 
+#'
 #' @param alpha A factor to scale up the waiting time in each iteration such
 #' that the waiting time in the k:th iteration is `alpha ^ k * delta`.
-#' 
+#'
 #' @param \ldots Not used.
 #'
 #' @return The FutureResult of the evaluated expression.
@@ -306,15 +313,15 @@ await.ClusterMQFuture <- local({
                    ...) {
     stop_if_not(is.finite(timeout), timeout >= 0)
     stop_if_not(is.finite(alpha), alpha > 0)
-    
+
     debug <- getOption("future.debug", FALSE)
-  
+
     expr <- future$expr
     workers <- future$workers
     stop_if_not(inherits(workers, "QSys"))
-  
+
     if (debug) mdebug("Wait for clustermq worker ...")
-  
+
     ## Sleep function - increases geometrically as a function of iterations
     sleep_fcn <- function(i) delta * alpha ^ (i - 1)
 
@@ -337,7 +344,7 @@ await.ClusterMQFuture <- local({
       if (debug) mstr(msg)
       ii <- ii + 1L
     }
-  
+
     if (debug) {
       mdebug("- clustermq worker: finished")
     }
@@ -352,7 +359,7 @@ await.ClusterMQFuture <- local({
     cleanup(future)
 
     if (debug) mdebug("Wait for clustermq worker ... done")
-    
+
     msg$result
   } # await()
 })
@@ -367,25 +374,25 @@ make_workers <- function(n_jobs = 1L, auto_cleanup = TRUE, debug = FALSE) {
   }
 
   attr(workers, "auto_cleanup") <- auto_cleanup
-  
+
   workers
 }
 
 
 cleanup_workers <- local({
   mdebug <- import_future("mdebug")
-  
+
   function(workers, ...) {
     stop_if_not(inherits(workers, "QSys"))
-    
+
     debug <- getOption("future.debug", FALSE)
 
     if (debug) mdebug("Cleanup worker ...")
-    
+
     if (debug) mdebug("- shutdown")
     success <- workers$send_shutdown_worker()
     if (debug) mdebug("- Result workers$send_shutdown_worker(): ", success)
-    
+
     if (debug) mdebug("- cleanup")
     success <- workers$cleanup(quiet = !debug)
     if (debug) mdebug("- Result workers$cleanup(): ", success)

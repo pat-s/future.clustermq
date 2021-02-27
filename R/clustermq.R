@@ -4,10 +4,10 @@
 #' future that will be evaluated in a background R session.
 #'
 #' @inheritParams ClusterMQFuture
-#' 
+#'
 #' @param workers The number of processes to be available for concurrent
 #' clustermq futures.
-#' 
+#'
 #' @param \ldots Additional arguments passed to `ClusterMQFuture()`.
 #'
 #' @return An object of class [ClusterMQFuture].
@@ -31,7 +31,7 @@ clustermq <- function(expr, envir = parent.frame(), substitute = TRUE,
                             workers = workers,
                             ...)
 
-  if (!future$lazy) future <- run(future)
+  if (!future$lazy) future <- run(future, debug = TRUE)
 
   future
 }
@@ -50,7 +50,7 @@ clustermq_local <- function(expr, envir = parent.frame(), substitute = TRUE,
   if (is.null(workers)) workers <- availableCores()
 
   workers <- clustermq::workers(n_jobs = 1L, qsys_id = "local")
-  
+
   future <- ClusterMQFuture(expr = expr, envir = envir, substitute = FALSE,
                             globals = globals,
                             label = label,
@@ -75,7 +75,7 @@ clustermq_multicore <- function(expr, envir = parent.frame(), substitute = TRUE,
   if (is.null(workers)) workers <- availableCores()
 
   workers <- clustermq::workers(n_jobs = workers, qsys_id = "multicore")
-  
+
   future <- ClusterMQFuture(expr = expr, envir = envir, substitute = FALSE,
                             globals = globals,
                             label = label,
